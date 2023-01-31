@@ -246,6 +246,7 @@ class Pipelines(object):
     realtime_video_object_detection = 'cspnet_realtime-video-object-detection_streamyolo'
     face_recognition = 'ir101-face-recognition-cfglint'
     uav_detection = 'manual-uav-detection-uav'
+    uav_detection_23 = '3rd-Anti-UAV-CVPR23'
     face_recognition_ood = 'ir-face-recognition-ood-rts'
     arc_face_recognition = 'ir50-face-recognition-arcface'
     mask_face_recognition = 'resnet-face-recognition-facemask'

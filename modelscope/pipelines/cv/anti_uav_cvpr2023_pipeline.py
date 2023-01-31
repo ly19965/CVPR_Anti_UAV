@@ -8,7 +8,8 @@ import PIL
 import torch
 
 from modelscope.metainfo import Pipelines
-from modelscope.models.cv.uav_detection import TrackerSiamFC
+from .siamfc import TrackerSiamFC
+from .detection_siamfc import TrackerSiamFC2
 from modelscope.outputs import OutputKeys
 from modelscope.pipelines import pipeline
 from modelscope.pipelines.base import Input, Pipeline
@@ -21,7 +22,7 @@ logger = get_logger()
 
 
 @PIPELINES.register_module(
-    Tasks.video_multi_object_tracking, module_name=Pipelines.uav_detection)
+    Tasks.video_multi_object_tracking, module_name=Pipelines.uav_detection_23)
 class UavTrakckerPipeline(Pipeline):
 
     def __init__(self, model: str, **kwargs):
@@ -32,8 +33,10 @@ class UavTrakckerPipeline(Pipeline):
         """
 
         super().__init__(model=model, **kwargs)
+        # you can substitute net_path with your trained model path
         net_path = osp.join(model, ModelFile.TORCH_MODEL_FILE)
         self.tracker = TrackerSiamFC(net_path=net_path)
+        self.tracker_2 = TrackerSiamFC2(net_path=net_path)
         logger.info('tracker model loaded!')
 
     def preprocess(self, input) -> Input:
@@ -41,38 +44,8 @@ class UavTrakckerPipeline(Pipeline):
         return input
 
     def forward(self, input: Input) -> Dict[str, Any]:
-        dataloader = LoadVideo(input, self.opt.img_size)
-        self.tracker.set_buffer_len(dataloader.frame_rate)
+        return input
 
-        results = []
-        output_timestamps = []
-        frame_id = 0
-        for i, (path, img, img0) in enumerate(dataloader):
-            output_timestamps.append(
-                timestamp_format(seconds=frame_id / dataloader.frame_rate))
-            blob = torch.from_numpy(img).unsqueeze(0)
-            online_targets = self.tracker.update(blob, img0)
-            online_tlwhs = []
-            online_ids = []
-            for t in online_targets:
-                tlwh = t.tlwh
-                tid = t.track_id
-                vertical = tlwh[2] / tlwh[3] > 1.6
-                if tlwh[2] * tlwh[3] > self.opt.min_box_area and not vertical:
-                    online_tlwhs.append([
-                        tlwh[0], tlwh[1], tlwh[0] + tlwh[2], tlwh[1] + tlwh[3]
-                    ])
-                    online_ids.append(tid)
-                results.append([
-                    frame_id + 1, tid, tlwh[0], tlwh[1], tlwh[0] + tlwh[2],
-                    tlwh[1] + tlwh[3]
-                ])
-            frame_id += 1
-
-        return {
-            OutputKeys.BOXES: results,
-            OutputKeys.TIMESTAMPS: output_timestamps
-        }
 
     def postprocess(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         return inputs

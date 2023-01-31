@@ -1,1 +1,0 @@
-from .siamfc import TrackerSiamFC
