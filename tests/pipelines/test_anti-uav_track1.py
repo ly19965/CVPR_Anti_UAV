@@ -78,8 +78,8 @@ class AntiUavTrack1Test(unittest.TestCase, DemoCompatibilityCheck):
         video_paths = glob.glob(os.path.join(self.dataset_dir, '*'))
         video_num = len(video_paths)
         overall_performance = []
-        video_id = 1
         mode = 'IR'
+        net_path = '/home/ly261666/.cache/modelscope/hub/damo/3rd_Anti-UAV_CVPR23/pytorch_model.pt'
 
         # run tracking experiments and report performance
         for video_id, video_path in enumerate(video_paths, start=1):
@@ -91,6 +91,7 @@ class AntiUavTrack1Test(unittest.TestCase, DemoCompatibilityCheck):
 
             video_name = os.path.basename(video_path)
             img_files = glob.glob(video_path + "/*jpg")
+            img_files.sort()
             res_file = os.path.join(video_path, '%s_label.json'%mode)
             with open(res_file, 'r') as f:
                 label_res = json.load(f)

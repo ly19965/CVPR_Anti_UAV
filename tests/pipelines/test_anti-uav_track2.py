@@ -92,6 +92,7 @@ class AntiUavTrack2Test(unittest.TestCase, DemoCompatibilityCheck):
 
             video_name = os.path.basename(video_path)
             img_files = glob.glob(video_path + "/*jpg")
+            img_files.sort()
 
             out_res = []
             pred_bbox = [0] # no prection
