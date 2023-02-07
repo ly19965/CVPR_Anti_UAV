@@ -15,6 +15,7 @@ train_img_dir = osp.join(data_root_dir, 'train')
 val_img_dir = osp.join(data_root_dir, 'validation')
 train_anno_path = osp.join(data_root_dir, 'train.json')
 val_anno_path = osp.join(data_root_dir, 'validation.json')
+val_anno_path = '/home/ly261666/workspace/maas/modelscope_project/Mass_env/or_data/train_data/validation.json'
 
 kwargs = dict(
             model='damo/cv_tinynas_uav-detection_damoyolo', # 使用DAMO-YOLO-S模型 

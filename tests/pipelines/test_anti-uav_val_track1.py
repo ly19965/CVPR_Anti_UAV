@@ -111,7 +111,10 @@ class AntiUavTrack1Val(unittest.TestCase, DemoCompatibilityCheck):
                 if frame_id % 100 == 0:
                     print ('vidio_id: {}/{}, frame_id: {}'.format(video_id, video_num, frame_id))
                 frame = cv2.imread(img_files[frame_id])
-                if frame_id == 0:
+                i
+                
+                
+                frame_id == 0:
                     tracker.init(frame, init_rect)  # initialization
                     out = init_rect
                     out_res.append(init_rect)
