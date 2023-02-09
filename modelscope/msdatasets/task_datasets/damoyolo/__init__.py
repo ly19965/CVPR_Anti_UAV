@@ -1,2 +1,2 @@
 # Copyright (c) Alibaba, Inc. and its affiliates.
-from .build import build_dataloader, build_dataset
+from .build import build_sot_dataloader, build_dataloader, build_dataset

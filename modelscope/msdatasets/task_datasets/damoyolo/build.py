@@ -123,9 +123,7 @@ def build_dataloader(datasets,
     data_loaders = []
     for dataset in datasets:
         sampler = make_data_sampler(dataset, shuffle)
-        batch_sampler = make_batch_sampler(dataset, sampler, images_per_gpu,
-                                           num_iters, start_iter,
-                                           enable_mosaic_mixup)
+        batch_sampler = make_batch_sampler(dataset, sampler, images_per_gpu, num_iters, start_iter, enable_mosaic_mixup)
         collator = BatchCollator(size_div)
         data_loader = torch.utils.data.DataLoader(
             dataset,
@@ -134,6 +132,49 @@ def build_dataloader(datasets,
             collate_fn=collator,
         )
         data_loaders.append(data_loader)
+    if is_train:
+        assert len(
+            data_loaders) == 1, 'multi-training set is not supported yet!'
+        return data_loaders[0]
+    return data_loaders
+
+def build_sot_dataloader(dataset,
+                     batch_size=128,
+                     start_epoch=None,
+                     total_epochs=None,
+                     no_aug_epochs=0,
+                     is_train=True,
+                     num_workers=8,
+                     size_div=32,
+                     distributed=False):
+
+    num_gpus = get_world_size()
+    assert (batch_size % num_gpus == 0), 'training_imgs_per_batch ({}) must be' \
+        'divisible by the number of GPUs ({}) used.'.format(batch_size, num_gpus)
+    images_per_gpu = batch_size // num_gpus
+
+    if is_train:
+        iters_per_epoch = math.ceil(len(dataset) / batch_size)
+        shuffle = True
+        num_iters = total_epochs * iters_per_epoch
+        start_iter = start_epoch * iters_per_epoch
+    else:
+        iters_per_epoch = math.ceil(len(dataset) / batch_size)
+        shuffle = False
+        num_iters = None
+        start_iter = 0
+
+    data_loaders = []
+    sampler = make_data_sampler(dataset, shuffle, distributed)
+    batch_sampler = make_batch_sampler(dataset, sampler, images_per_gpu,
+                                       num_iters, start_iter)
+    data_loader = torch.utils.data.DataLoader(
+        dataset,
+        num_workers=num_workers,
+        batch_sampler=batch_sampler,
+        #collate_fn=collator,
+    )
+    data_loaders.append(data_loader)
     if is_train:
         assert len(
             data_loaders) == 1, 'multi-training set is not supported yet!'

@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from .image_inpainting import ImageInpaintingDataset
     from .text_ranking_dataset import TextRankingDataset
     from .referring_video_object_segmentation import ReferringVideoObjectSegmentationDataset
+    from .got10k_dataset import Got10kDataset, Pairwise
 
 else:
     _import_structure = {
@@ -35,6 +36,8 @@ else:
         ['ImagePortraitEnhancementDataset'],
         'referring_video_object_segmentation':
         ['ReferringVideoObjectSegmentationDataset'],
+        'got10k_dataset':
+        ['Got10kDataset', 'Pairwise'],
     }
     import sys
 

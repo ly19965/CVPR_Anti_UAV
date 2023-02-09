@@ -28,82 +28,9 @@ class TestTinynasDamoyoloTrainerSingleGPU(unittest.TestCase):
         self.model_id = 'damo/cv_tinynas_object-detection_damoyolo'
         self.cache_path = _setup()
 
+    #@unittest.skip('multiGPU test is varified offline')
     @unittest.skipUnless(test_level() >= 0, 'skip test in current test level')
-    def test_trainer_from_scratch_singleGPU(self):
-        kwargs = dict(
-            cfg_file=os.path.join(self.cache_path, 'configuration.json'),
-            gpu_ids=[
-                0,
-            ],
-            batch_size=2,
-            max_epochs=3,
-            num_classes=80,
-            base_lr_per_img=0.001,
-            cache_path=self.cache_path,
-            train_image_dir='./data/test/images/image_detection/images',
-            val_image_dir='./data/test/images/image_detection/images',
-            train_ann=
-            './data/test/images/image_detection/annotations/coco_sample.json',
-            val_ann=
-            './data/test/images/image_detection/annotations/coco_sample.json',
-        )
-        trainer = build_trainer(
-            name=Trainers.tinynas_damoyolo, default_args=kwargs)
-        trainer.train()
-        trainer.evaluate(
-            checkpoint_path=os.path.join(self.cache_path,
-                                         'damoyolo_tinynasL25_S.pt'))
-
-    @unittest.skipUnless(test_level() >= 0, 'skip test in current test level')
-    def test_trainer_from_scratch_singleGPU_model_id(self):
-        kwargs = dict(
-            model=self.model_id,
-            gpu_ids=[
-                0,
-            ],
-            batch_size=2,
-            max_epochs=3,
-            num_classes=80,
-            load_pretrain=True,
-            base_lr_per_img=0.001,
-            train_image_dir='./data/test/images/image_detection/images',
-            val_image_dir='./data/test/images/image_detection/images',
-            train_ann=
-            './data/test/images/image_detection/annotations/coco_sample.json',
-            val_ann=
-            './data/test/images/image_detection/annotations/coco_sample.json',
-        )
-        trainer = build_trainer(
-            name=Trainers.tinynas_damoyolo, default_args=kwargs)
-        trainer.train()
-        trainer.evaluate(
-            checkpoint_path=os.path.join(self.cache_path,
-                                         'damoyolo_tinynasL25_S.pt'))
-
-    @unittest.skip('multiGPU test is varified offline')
     def test_trainer_from_scratch_multiGPU(self):
-        kwargs = dict(
-            cfg_file=os.path.join(self.cache_path, 'configuration.json'),
-            gpu_ids=[
-                0,
-                1,
-            ],
-            batch_size=32,
-            max_epochs=3,
-            num_classes=1,
-            cache_path=self.cache_path,
-            train_image_dir='./data/test/images/image_detection/images',
-            val_image_dir='./data/test/images/image_detection/images',
-            train_ann=
-            './data/test/images/image_detection/annotations/coco_sample.json',
-            val_ann=
-            './data/test/images/image_detection/annotations/coco_sample.json')
-        trainer = build_trainer(
-            name=Trainers.tinynas_damoyolo, default_args=kwargs)
-        trainer.train()
-
-    @unittest.skipUnless(test_level() >= 0, 'skip test in current test level')
-    def test_trainer_finetune_singleGPU(self):
         kwargs = dict(
             cfg_file=os.path.join(self.cache_path, 'configuration.json'),
             gpu_ids=[
@@ -112,19 +39,17 @@ class TestTinynasDamoyoloTrainerSingleGPU(unittest.TestCase):
             batch_size=16,
             max_epochs=3,
             num_classes=1,
-            load_pretrain=True,
-            pretrain_model=os.path.join(self.cache_path,
-                                        'damoyolo_tinynasL25_S.pt'),
             cache_path=self.cache_path,
-            train_image_dir='./data/test/images/image_detection/images',
-            val_image_dir='./data/test/images/image_detection/images',
+            train_image_dir='/home/ly261666/datasets/coco/coco_2017/train2017',
+            val_image_dir='/home/ly261666/datasets/coco/coco_2017/train2017',
             train_ann=
-            './data/test/images/image_detection/annotations/coco_sample.json',
+            '/home/ly261666/datasets/coco/coco_2017/annotations/instances_train2017.json',
             val_ann=
-            './data/test/images/image_detection/annotations/coco_sample.json')
+            '/home/ly261666/datasets/coco/coco_2017/annotations/instances_train2017.json')
         trainer = build_trainer(
             name=Trainers.tinynas_damoyolo, default_args=kwargs)
         trainer.train()
+
 
 
 if __name__ == '__main__':

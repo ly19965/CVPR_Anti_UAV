@@ -17,16 +17,21 @@ from modelscope.utils.constant import DownloadMode
 import glob
 import time
 
-class AntiUavTrack1Val(unittest.TestCase, DemoCompatibilityCheck):
+class AntiUavTrack2Test(unittest.TestCase, DemoCompatibilityCheck):
 
     def setUp(self) -> None:
-        self.task = Tasks.video_multi_object_tracking
-        self.model_id = 'damo/3rd_Anti-UAV_CVPR23'
-        val_set = MsDataset.load('3rd_Anti-UAV', namespace='ly261666', split='validation')
-        assert val_set is not None, 'test set should be downloaded first'
+        self.tracker_task = Tasks.video_single_object_tracking
+        self.tracker_model_id = 'damo/cv_alex_video-single-object-tracking_siamfc-uav'
+
+        self.det_task = Tasks.domain_specific_object_detection
+        self.det_model_id = 'damo/cv_tinynas_uav-detection_damoyolo'
+
+        track1_test_set = MsDataset.load('3rd_Anti-UAV', namespace='ly261666', split='validation')
+        assert track1_test_set is not None, 'test set should be downloaded first'
         # set own path
         self.dataset_dir = '/home/ly261666/.cache/modelscope/hub/datasets/ly261666/3rd_Anti-UAV/master/data_files/extracted/7b8a88c5a8f38cced25ee619b96d924c0eea9f033bb57fc160ca2ec004d1ee6f/validation'
         self.visulization = False
+
 
     def iou(self, bbox1, bbox2):
         """
@@ -86,56 +91,51 @@ class AntiUavTrack1Val(unittest.TestCase, DemoCompatibilityCheck):
         video_paths = glob.glob(os.path.join(self.dataset_dir, '*'))
         video_num = len(video_paths)
         overall_performance = []
+        video_id = 1
         mode = 'IR'
         truth_dir = self.dataset_dir
 
         # run tracking experiments and report performance
         for video_id, video_path in enumerate(video_paths, start=1):
-            uav_detection = pipeline(self.task, model=self.model_id)
-            tracker = uav_detection.tracker
-            output_dir = os.path.join('results', tracker.name)
+            uav_tracker = pipeline(self.tracker_task, model=self.tracker_model_id)
+            uav_detection = pipeline(self.det_task, model=self.det_model_id)
+            tracker = uav_tracker.model
+
+            output_dir = os.path.join('results', 'uav_det_' + tracker.tracker_name)
             if not os.path.exists(output_dir):
                 os.makedirs(output_dir)
 
             video_name = os.path.basename(video_path)
             img_files = glob.glob(video_path + "/*jpg")
             img_files.sort()
-            res_file = os.path.join(video_path, '%s_label.json'%mode)
-            with open(res_file, 'r') as f:
-                label_res = json.load(f)
 
-            init_rect = label_res['gt_rect'][0]
             out_res = []
+            pred_bbox = [0] # no prection
             start_time = time.time()
             for frame_id in range(len(img_files)):
                 if frame_id % 100 == 0:
-                    print ('vidio_id: {}/{}, frame_id: {}'.format(video_id, video_num, frame_id))
+                    print ('video_id: {}/{}, frame_id: {}'.format(video_id, video_num, frame_id))
                 frame = cv2.imread(img_files[frame_id])
-                if frame_id == 0:
-                    tracker.init(frame, init_rect)  # initialization
-                    out = init_rect
-                    out_res.append(init_rect)
+                if len(pred_bbox) == 1:
+                    pred_bbox = uav_detection(frame)['boxes'][0].tolist()
+                    pred_bbox[2] = pred_bbox[2] - pred_bbox[0] + 1
+                    pred_bbox[3] = pred_bbox[3] - pred_bbox[1] + 1
+                    tracker.initialize(frame, {'init_bbox': pred_bbox})  # initialization
+                    pred_bbox = list(map(int, pred_bbox))
+                    out_res.append(pred_bbox)
                 else:
-                    out = tracker.update(frame)  # tracking
-                    out_res.append(out.tolist())
-                if self.visulization:
-                    _gt = label_res['gt_rect'][frame_id]
-                    _exist = label_res['exist'][frame_id]
-                    if _exist:
-                        cv2.rectangle(frame, (int(_gt[0]), int(_gt[1])), (int(_gt[0] + _gt[2]), int(_gt[1] + _gt[3])),
-                                      (0, 255, 0))
-                    cv2.putText(frame, 'exist' if _exist else 'not exist',
-                                (frame.shape[1] // 2 - 20, 30), 1, 2, (0, 255, 0) if _exist else (0, 0, 255), 2)
-
-                    cv2.rectangle(frame, (int(out[0]), int(out[1])), (int(out[0] + out[2]), int(out[1] + out[3])),
-                                  (0, 255, 255))
-                    cv2.imshow(video_name, frame)
-                    cv2.waitKey(1)
+                    out = tracker.track(frame)  # tracking
+                    pred_bbox = out['target_bbox'].tolist()
+                    pred_bbox = list(map(int, pred_bbox))
+                    pred_bbox[3] = pred_bbox[3] - pred_bbox[1] + 1
+                    pred_bbox[2] = pred_bbox[2] - pred_bbox[0] + 1
+                    out_res.append(pred_bbox)
+                frame_id += 1
             if self.visulization:
                 cv2.destroyAllWindows()
             end_time = time.time()
             FPS = len(img_files) / (end_time - start_time)
-            print(str(video_num)+' - '+str(video_id)+' : '+str(FPS))
+            print(str(video_num) + ' - ' + str(video_id) + ' : ' + str(FPS))
             # save result
             output_file = os.path.join(output_dir, '%s_%s.txt' % (video_name, mode))
             with open(output_file, 'w') as f:
@@ -192,10 +192,6 @@ class AntiUavTrack1Val(unittest.TestCase, DemoCompatibilityCheck):
 
                 output_file.close()
 
-
-    @unittest.skipUnless(test_level() >= 0, 'skip test in current test level')
-    def test_demo_compatibility(self):
-        self.compatibility_check()
 
 
 if __name__ == '__main__':

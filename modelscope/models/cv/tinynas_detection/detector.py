@@ -83,7 +83,7 @@ class SingleStageDetector(TorchModel):
 
     def postprocess(self, preds):
         bboxes, scores, labels_idx = postprocess_gfocal(
-            preds, self.num_classes, self.conf_thre, self.nms_thre)
+            preds, self.num_classes, 0.005, self.nms_thre)
         bboxes = bboxes.cpu().numpy()
         scores = scores.cpu().numpy()
         labels_idx = labels_idx.cpu().numpy()

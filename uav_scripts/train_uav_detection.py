@@ -23,13 +23,13 @@ kwargs = dict(
             cfg_file=os.path.join(cache_path, 'configuration.json'),
             model='damo/cv_tinynas_uav-detection_damoyolo', # 使用DAMO-YOLO-S模型 
             gpu_ids=[  # 指定训练使用的gpu
-            0,
+            0,1,2,3,4,5,6,7
             ],
-            batch_size=16, # batch_size, 每个gpu上的图片数等于batch_size // len(gpu_ids)
-            max_epochs=3, # 总的训练epochs
+            batch_size=64, # batch_size, 每个gpu上的图片数等于batch_size // len(gpu_ids)
+            max_epochs=10, # 总的训练epochs
             num_classes=1, # 自定义数据中的类别数
             cache_path=cache_path,
-            #load_pretrain=True, # 是否载入预训练模型，若为False，则为从头重新训练
+            load_pretrain=True, # 是否载入预训练模型，若为False，则为从头重新训练
             base_lr_per_img=0.01, # 每张图片的学习率，lr=base_lr_per_img*batch_size
             train_image_dir=train_img_dir, # 训练图片路径
             val_image_dir=val_img_dir, # 测试图片路径
@@ -38,6 +38,7 @@ kwargs = dict(
             )
 
 # Step 3: 开启训练任务
-trainer = build_trainer(
-                    name=Trainers.tinynas_damoyolo, default_args=kwargs)
-trainer.train()
+if __name__ == '__main__':
+    trainer = build_trainer(
+                        name=Trainers.tinynas_damoyolo, default_args=kwargs)
+    trainer.train()

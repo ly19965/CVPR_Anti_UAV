@@ -32,11 +32,15 @@ class VideoSingleObjectTrackingPipeline(Pipeline):
             model: model id on modelscope hub.
         """
         super().__init__(model=model, **kwargs)
-        self.cfg = cfg
-        ckpt_path = osp.join(model, ModelFile.TORCH_MODEL_BIN_FILE)
-        logger.info(f'loading model from {ckpt_path}')
-        self.tracker = OSTrack(ckpt_path, self.device)
-        logger.info('init tracker done')
+        if isinstance(self.model, str):
+            self.cfg = cfg
+            ckpt_path = osp.join(model, ModelFile.TORCH_MODEL_BIN_FILE)
+            logger.info(f'loading model from {ckpt_path}')
+            self.tracker = OSTrack(ckpt_path, self.device)
+            logger.info('init tracker done')
+        else:
+            self.tracker = self.model
+            logger.info('init tracker done')
 
     def preprocess(self, input) -> Input:
         self.video_path = input[0]

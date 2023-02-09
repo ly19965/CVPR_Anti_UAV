@@ -25,8 +25,7 @@ from modelscope.models.cv.tinynas_detection.damo.detectors.detector import (
     build_ddp_model, build_local_model)
 from modelscope.models.cv.tinynas_detection.damo.utils import (
     cosine_scheduler, ema_model)
-from modelscope.msdatasets.task_datasets.damoyolo import (build_dataloader,
-                                                          build_dataset)
+from modelscope.msdatasets.task_datasets.damoyolo import build_sot_dataloader
 from modelscope.trainers.base import BaseTrainer
 from modelscope.trainers.builder import TRAINERS
 from modelscope.utils.checkpoint import save_checkpoint
@@ -34,9 +33,10 @@ from modelscope.utils.constant import ModelFile
 from modelscope.utils.logger import get_logger
 from modelscope.utils.metric import MeterBuffer
 from modelscope.utils.torch_utils import get_rank, synchronize
+from modelscope.msdatasets.task_datasets import Got10kDataset, Pairwise
 
 
-@TRAINERS.register_module(module_name=Trainers.tinynas_damoyolo)
+@TRAINERS.register_module(module_name=Trainers.video_single_object_tracking)
 class ImageDetectionDamoyoloTrainer(BaseTrainer):
 
     def __init__(self,
@@ -46,7 +46,7 @@ class ImageDetectionDamoyoloTrainer(BaseTrainer):
                  cache_path: str = None,
                  *args,
                  **kwargs):
-        """ High-level finetune api for Damoyolo.
+        """ 
 
         Args:
             model: Model id of modelscope models.
@@ -70,8 +70,7 @@ class ImageDetectionDamoyoloTrainer(BaseTrainer):
                 self.cache_path = cache_path
         super().__init__(self.cfg_file)
         cfg = self.cfg
-        cfg.model.backbone.structure_file = os.path.join(
-            self.cache_path, cfg.model.backbone.structure_file)
+        cfg.model.model_id = model
         if load_pretrain:
             if 'pretrain_model' in kwargs:
                 cfg.train.finetune_path = kwargs['pretrain_model']
@@ -92,12 +91,6 @@ class ImageDetectionDamoyoloTrainer(BaseTrainer):
             cfg.dataset.train_image_dir = kwargs['train_image_dir']
         if 'val_image_dir' in kwargs:
             cfg.dataset.val_image_dir = kwargs['val_image_dir']
-        if 'train_ann' in kwargs:
-            cfg.dataset.train_ann = kwargs['train_ann']
-        if 'val_ann' in kwargs:
-            cfg.dataset.val_ann = kwargs['val_ann']
-        if 'num_classes' in kwargs:
-            cfg.model.head.num_classes = kwargs['num_classes']
         if 'base_lr_per_img' in kwargs:
             cfg.train.base_lr_per_img = kwargs['base_lr_per_img']
 
@@ -113,7 +106,7 @@ class ImageDetectionDamoyoloTrainer(BaseTrainer):
             init_method='tcp://127.0.0.1:12344',
             rank=local_rank,
             world_size=world_size)
-        trainer = DamoyoloTrainer(cfg, None, None)
+        trainer = SotTrainer(cfg, None, None)
         trainer.train(local_rank)
 
     def train(self):
@@ -124,7 +117,7 @@ class ImageDetectionDamoyoloTrainer(BaseTrainer):
                 args=(self.world_size, self.cfg),
                 join=True)
         else:
-            trainer = DamoyoloTrainer(self.cfg, None, None)
+            trainer = SotTrainer(self.cfg, None, None)
             trainer.train(local_rank=0)
 
     def evaluate(self,
@@ -144,10 +137,7 @@ class ImageDetectionDamoyoloTrainer(BaseTrainer):
         new_config.model = config.model
         new_config.dataset = config.dataset
         new_config.train = config.train
-        new_config.test = config.evaluation
 
-        new_config.train.augment = config.preprocessor.train
-        new_config.test.augment = config.preprocessor.evaluation
 
         new_config.train.warmup_start_lr = config.train.lr_scheduler.warmup_start_lr
         new_config.train.min_lr_ratio = config.train.lr_scheduler.min_lr_ratio
@@ -160,6 +150,8 @@ class ImageDetectionDamoyoloTrainer(BaseTrainer):
         new_config.train.weight_decay = config.train.optimizer.weight_decay
         new_config.train.total_epochs = config.train.max_epochs
 
+        new_config.task = config.task
+
         del new_config['train']['miscs']
         del new_config['train']['lr_scheduler']
         del new_config['train']['optimizer']
@@ -168,7 +160,7 @@ class ImageDetectionDamoyoloTrainer(BaseTrainer):
         return new_config
 
 
-class DamoyoloTrainer:
+class SotTrainer:
 
     def __init__(self, cfg, args, tea_cfg=None):
         self.cfg = cfg
@@ -197,25 +189,19 @@ class DamoyoloTrainer:
 
     def get_data_loader(self, cfg, distributed=False):
 
-        train_dataset = build_dataset(
-            cfg,
-            cfg.dataset.train_image_dir,
-            cfg.dataset.train_ann,
-            is_train=True,
-            mosaic_mixup=cfg.train.augment.mosaic_mixup)
-        val_dataset = build_dataset(
-            cfg,
-            cfg.dataset.val_image_dir,
-            cfg.dataset.val_ann,
-            is_train=False)
+        if hasattr(cfg.dataset, 'dataset_type'):
+            seq_train_dataset = Got10kDataset(
+                root_dir=cfg.dataset.train_image_dir,
+                subset='train',
+                dataset_type=cfg.dataset.dataset_type)
+        else:
+            seq_train_dataset = Got10kDataset(
+                root_dir=cfg.dataset.train_image_dir,
+                subset='train')
+        pair_train_dataset = Pairwise(seq_train_dataset)
 
-        iters_per_epoch = math.ceil(
-            len(train_dataset[0])
-            / cfg.train.batch_size)  # train_dataset is a list, however,
-
-        train_loader = build_dataloader(
-            train_dataset,
-            cfg.train.augment,
+        train_loader = build_sot_dataloader(
+            pair_train_dataset,
             batch_size=cfg.train.batch_size,
             start_epoch=self.start_epoch,
             total_epochs=cfg.train.total_epochs,
@@ -224,16 +210,11 @@ class DamoyoloTrainer:
             size_div=32,
             distributed=distributed)
 
-        val_loader = build_dataloader(
-            val_dataset,
-            cfg.test.augment,
-            batch_size=cfg.test.batch_size,
-            num_workers=cfg.miscs.num_workers,
-            is_train=False,
-            size_div=32,
-            distributed=distributed)
+        iters_per_epoch = math.ceil(
+            len(pair_train_dataset)
+            / cfg.train.batch_size)  
 
-        return train_loader, val_loader, iters_per_epoch
+        return train_loader, iters_per_epoch
 
     def setup_iters(self, iters_per_epoch, start_epoch, total_epochs,
                     warmup_epochs, no_aug_epochs, eval_interval_epochs,
@@ -262,16 +243,6 @@ class DamoyoloTrainer:
             elif hasattr(v, 'weight') and isinstance(v.weight, nn.Parameter):
                 weight_group.append(v.weight)
 
-        if self.distill:
-            for k, v in self.feature_loss.named_modules():
-                if hasattr(v, 'bias') and isinstance(v.bias, nn.Parameter):
-                    bias_group.append(v.bias)
-                if isinstance(v, nn.BatchNorm2d) or 'bn' in k:
-                    bn_group.append(v.weight)
-                elif hasattr(v, 'weight') and isinstance(
-                        v.weight, nn.Parameter):
-                    weight_group.append(v.weight)
-
         optimizer = torch.optim.SGD(
             bn_group,
             lr=1e-3,  # only used to init optimizer,
@@ -289,34 +260,15 @@ class DamoyoloTrainer:
 
     def train(self, local_rank):
         # build model
-        self.model = build_local_model(self.cfg, self.device)
-        if self.distributed:
-            self.model = nn.SyncBatchNorm.convert_sync_batchnorm(self.model)
-
-        if self.tea_cfg is not None:
-            self.distill = True
-            self.grad_clip = 30
-            self.tea_model = build_local_model(self.tea_cfg, self.device)
-            self.tea_model.eval()
-            tea_ckpt = torch.load(args.tea_ckpt, map_location=self.device)
-            if 'model' in tea_ckpt:
-                self.tea_model.load_state_dict(tea_ckpt['model'], strict=True)
-            elif 'state_dict' in tea_ckpt:
-                self.tea_model.load_state_dict(tea_ckpt['model'], strict=True)
-            self.feature_loss = FeatureLoss(
-                self.model.neck.out_channels,
-                self.tea_model.neck.out_channels,
-                distiller='cwd').to(self.device)
-        else:
-            self.distill = False
-            self.grad_clip = None
+        from modelscope.models import Model
+        self.model = Model.from_pretrained(self.cfg.model.model_id, cfg_dict=self.cfg).to(self.device)
 
         self.optimizer = self.build_optimizer(self.cfg.train.momentum,
                                               self.cfg.train.weight_decay)
         # resume model
         if self.cfg.train.finetune_path is not None:
             self.logger.info(f'finetune from {self.cfg.train.finetune_path}')
-            self.model.load_pretrain_detector(self.cfg.train.finetune_path)
+            self.model.load_pretrain(self.cfg.train.finetune_path)
             self.epoch = 0
             self.start_epoch = 0
         elif self.cfg.train.resume_path is not None:
@@ -329,17 +281,11 @@ class DamoyoloTrainer:
         else:
             self.epoch = 0
             self.start_epoch = 0
+            self.model.net._initialize_weights()
             self.logger.info('Start Training...')
 
-        if self.cfg.train.ema:
-            self.logger.info(
-                'Enable ema model! Ema model will be evaluated and saved.')
-            self.ema_model = ema_model(self.model, self.cfg.train.ema_momentum)
-        else:
-            self.ema_model = None
-
         # dataloader
-        self.train_loader, self.val_loader, iters = self.get_data_loader(
+        self.train_loader, iters = self.get_data_loader(
             self.cfg, self.distributed)
 
         # setup iters according epochs and iters_per_epoch
@@ -355,7 +301,6 @@ class DamoyoloTrainer:
             self.cfg.train.min_lr_ratio, self.total_iters, self.no_aug_iters,
             self.warmup_iters, self.cfg.train.warmup_start_lr)
 
-        self.mosaic_mixup = 'mosaic_mixup' in self.cfg.train.augment
 
         # distributed model init
         if self.distributed:
@@ -369,50 +314,26 @@ class DamoyoloTrainer:
         self.model.train()
         iter_start_time = time.time()
         iter_end_time = time.time()
-        for data_iter, (inps, targets, ids) in enumerate(self.train_loader):
+        for data_iter, (inps, inps_pair) in enumerate(self.train_loader):
             cur_iter = self.start_iter + data_iter
 
             lr = self.lr_scheduler.get_lr(cur_iter)
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = lr
 
-            inps = inps.to(self.device)  # ImageList: tensors, img_size
-            targets = [target.to(self.device)
-                       for target in targets]  # BoxList: bbox, num_boxes ...
+            inps = inps.to(self.device)  
+            inps_pair = inps_pair.to(self.device) 
 
             model_start_time = time.time()
 
-            if self.distill:
-                outputs, fpn_outs = self.model(inps, targets, stu=True)
-                loss = outputs['total_loss']
-                with torch.no_grad():
-                    fpn_outs_tea = self.tea_model(inps, targets, tea=True)
-                distill_weight = (
-                    (1 - math.cos(cur_iter * math.pi / len(self.train_loader)))
-                    / 2) * (0.1 - 1) + 1
 
-                distill_loss = distill_weight * self.feature_loss(
-                    fpn_outs, fpn_outs_tea)
-                loss += distill_loss
-                outputs['distill_loss'] = distill_loss
-
-            else:
-
-                outputs = self.model(inps, targets)
-                loss = outputs['total_loss']
+            outputs = self.model([inps, inps_pair], device=self.device)
+            loss = outputs['total_loss']
 
             self.optimizer.zero_grad()
             loss.backward()
-            if self.grad_clip is not None:
-                nn.utils.clip_grad_norm_(
-                    self.model.parameters(),
-                    max_norm=self.grad_clip,
-                    norm_type=2)  # for stable training
-
             self.optimizer.step()
 
-            if self.ema_model is not None:
-                self.ema_model.update(cur_iter, self.model)
 
             iter_start_time = iter_end_time
             iter_end_time = time.time()
@@ -425,16 +346,9 @@ class DamoyoloTrainer:
                 **outputs_array,
             )
 
-            if cur_iter + 1 > self.total_iters - self.no_aug_iters:
-                if self.mosaic_mixup:
-                    self.logger.info('--->turn OFF mosaic aug now!')
-                    self.train_loader.batch_sampler.set_mosaic(False)
-                    self.eval_interval_iters = self.iters_per_epoch
-                    self.ckpt_interval_iters = self.iters_per_epoch
-                    self.mosaic_mixup = False
 
             # log needed information
-            if (cur_iter + 1) % self.print_interval_iters == 0:
+            if (cur_iter + 1) % self.print_interval_iters == 0 and local_rank == 0:
                 left_iters = self.total_iters - (cur_iter + 1)
                 eta_seconds = self.meter['iter_time'].global_avg * left_iters
                 eta_str = 'ETA: {}'.format(
@@ -462,7 +376,7 @@ class DamoyoloTrainer:
                     loss_str,
                     self.meter['lr'].latest,
                 ) + (', size: ({:d}, {:d}), {}'.format(
-                    inps.tensors.shape[2], inps.tensors.shape[3], eta_str)))
+                    inps.shape[2], inps.shape[3], eta_str)))
                 self.meter.clear_meters()
 
             if (cur_iter + 1) % self.ckpt_interval_iters == 0:
@@ -472,7 +386,6 @@ class DamoyoloTrainer:
 
             if (cur_iter + 1) % self.eval_interval_iters == 0:
                 time.sleep(0.003)
-                #self.evaluate(local_rank, self.cfg.dataset.val_ann)
                 self.model.train()
             synchronize()
 
@@ -483,18 +396,13 @@ class DamoyoloTrainer:
 
     def save_ckpt(self, ckpt_name, local_rank, update_best_ckpt=False):
         if local_rank == 0:
-            if self.ema_model is not None:
-                save_model = self.ema_model.model
+            if isinstance(self.model, DDP):
+                save_model = self.model.module.net
             else:
-                if isinstance(self.model, DDP):
-                    save_model = self.model.module
-                else:
-                    save_model = self.model
+                save_model = self.model.net
             ckpt_name = os.path.join(self.file_name, ckpt_name)
             self.logger.info('Save weights to {}'.format(ckpt_name))
             meta = {'epoch': self.epoch + 1}
-            if self.distill:
-                meta.update(feature_loss=self.feature_loss.state_dict())
             save_checkpoint(
                 model=save_model,
                 filename=ckpt_name,

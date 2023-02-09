@@ -6,6 +6,7 @@ import cv2
 import json
 import os
 import numpy as np
+import torch
 
 from modelscope.msdatasets import MsDataset
 from modelscope.pipelines import pipeline
@@ -20,8 +21,8 @@ import time
 class AntiUavTrack1Val(unittest.TestCase, DemoCompatibilityCheck):
 
     def setUp(self) -> None:
-        self.task = Tasks.video_multi_object_tracking
-        self.model_id = 'damo/3rd_Anti-UAV_CVPR23'
+        self.task = Tasks.video_single_object_tracking
+        self.model_id = 'damo/cv_alex_video-single-object-tracking_siamfc'
         val_set = MsDataset.load('3rd_Anti-UAV', namespace='ly261666', split='validation')
         assert val_set is not None, 'test set should be downloaded first'
         # set own path
@@ -91,9 +92,9 @@ class AntiUavTrack1Val(unittest.TestCase, DemoCompatibilityCheck):
 
         # run tracking experiments and report performance
         for video_id, video_path in enumerate(video_paths, start=1):
-            uav_detection = pipeline(self.task, model=self.model_id)
-            tracker = uav_detection.tracker
-            output_dir = os.path.join('results', tracker.name)
+            uav_tracker = pipeline(self.task, model=self.model_id)
+            tracker = uav_tracker.model
+            output_dir = os.path.join('results', tracker.tracker_name + '_{got10k}')
             if not os.path.exists(output_dir):
                 os.makedirs(output_dir)
 
@@ -112,12 +113,16 @@ class AntiUavTrack1Val(unittest.TestCase, DemoCompatibilityCheck):
                     print ('vidio_id: {}/{}, frame_id: {}'.format(video_id, video_num, frame_id))
                 frame = cv2.imread(img_files[frame_id])
                 if frame_id == 0:
-                    tracker.init(frame, init_rect)  # initialization
+                    tracker.initialize(frame, {'init_bbox': init_rect})  # initialization
                     out = init_rect
                     out_res.append(init_rect)
                 else:
-                    out = tracker.update(frame)  # tracking
-                    out_res.append(out.tolist())
+                    out = tracker.track(frame)  # tracking
+                    pred_bbox = out['target_bbox'].tolist()
+                    pred_bbox = list(map(int, pred_bbox))
+                    pred_bbox[3] = pred_bbox[3] - pred_bbox[1] + 1
+                    pred_bbox[2] = pred_bbox[2] - pred_bbox[0] + 1
+                    out_res.append(pred_bbox)
                 if self.visulization:
                     _gt = label_res['gt_rect'][frame_id]
                     _exist = label_res['exist'][frame_id]
