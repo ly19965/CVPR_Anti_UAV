@@ -244,7 +244,10 @@ class Pairwise(Dataset):
             image = ImageOps.expand(image, border=npad, fill=avg_color)
 
         # crop image patch
-        corners = tuple((corners + npad).astype(int))
+        #corners = tuple((corners + npad).astype(int))
+        corners = (corners + npad).astype(int)
+        corners[0::2] = np.clip(corners[0::2], 0, image.size[0])
+        corners[1::2] = np.clip(corners[1::2], 0, image.size[1])
         patch = image.crop(corners)
 
         resize_ratio =  target_size / patch.size[0]

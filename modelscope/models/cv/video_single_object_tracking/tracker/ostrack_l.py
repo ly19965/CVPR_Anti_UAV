@@ -246,6 +246,16 @@ class OsTrackL(TorchModel):
         else:
             return loss
 
+    def _initialize_weights(self):
+        for m in self.net.modules():
+            if isinstance(m, nn.Conv2d):
+                init.kaiming_normal_(m.weight.data, mode='fan_out',
+                                     nonlinearity='relu')
+                m.bias.data.fill_(0)
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+
     def load_pretrain(self, ckpt_path):
         load_dict = torch.load(ckpt_path, map_location='cpu')['state_dict']
         new_dict = {}

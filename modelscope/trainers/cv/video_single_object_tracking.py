@@ -93,6 +93,8 @@ class ImageDetectionDamoyoloTrainer(BaseTrainer):
             cfg.dataset.val_image_dir = kwargs['val_image_dir']
         if 'base_lr_per_img' in kwargs:
             cfg.train.base_lr_per_img = kwargs['base_lr_per_img']
+        if 'workers_per_gpu' in kwargs:
+            cfg.train.dataloader.workers_per_gpu = kwargs['workers_per_gpu']
 
         self.gpu_ids = cfg.train.gpu_ids
         self.world_size = len(self.gpu_ids)
@@ -281,7 +283,7 @@ class SotTrainer:
         else:
             self.epoch = 0
             self.start_epoch = 0
-            #self.model.net._initialize_weights()
+            self.model._initialize_weights()
             self.logger.info('Start Training...')
 
         # dataloader

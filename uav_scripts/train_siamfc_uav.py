@@ -8,7 +8,7 @@ import os
 import json
 
 # Step 1: 数据集准备
-#train_dataset = MsDataset.load('Got-10k', namespace='ly261666', split='train')
+train_dataset = MsDataset.load('Got-10k', namespace='ly261666', split='train')
 
 # Step 2: 相关参数设置
 data_root_dir = '/home/ly261666/workspace/maas/modelscope_project/Mass_env/or_data/train_data/new_data' # 下载的数据集路径
