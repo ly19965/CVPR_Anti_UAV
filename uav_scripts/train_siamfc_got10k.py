@@ -14,13 +14,14 @@ import json
 data_root_dir = '/home/ly261666/workspace/maas/modelscope_project/Mass_env/or_data/train_data/got10k_v1' # 下载的数据集路径
 model_id = 'damo/cv_alex_video-single-object-tracking_siamfc'
 cache_path = '/home/ly261666/.cache/modelscope/hub/damo/cv_alex_video-single-object-tracking_siamfc'# 下载的modelscope模型路径
-cfg_file = os.path.join(cache_path, 'configuration.json')
+#cfg_file = os.path.join(cache_path, 'configuration.json')
+cfg_file = '/home/ly261666/workspace/maas/modelscope_project/Mass_env/CVPR_Anti_UAV/configuration.json'
 
 kwargs = dict(
     cfg_file=cfg_file,
     model=model_id, # 使用Siamfc_got10k模型 
     gpu_ids=[  # 指定训练使用的gpu
-    0,1,2,3,4,5,6,7
+    0#,1,2,3,4,5,6,7
     ],
     batch_size=64, # batch_size, 每个gpu上的图片数等于batch_size // len(gpu_ids)
     max_epochs=300, # 总的训练epochs

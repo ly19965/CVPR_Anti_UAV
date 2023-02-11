@@ -198,7 +198,7 @@ class SotTrainer:
             seq_train_dataset = Got10kDataset(
                 root_dir=cfg.dataset.train_image_dir,
                 subset='train')
-        pair_train_dataset = Pairwise(seq_train_dataset)
+        pair_train_dataset = Pairwise(seq_train_dataset, exemplar_sz=cfg.dataset.exemplar_size, instance_sz=cfg.dataset.instance_sz)
 
         train_loader = build_sot_dataloader(
             pair_train_dataset,
@@ -281,7 +281,7 @@ class SotTrainer:
         else:
             self.epoch = 0
             self.start_epoch = 0
-            self.model.net._initialize_weights()
+            #self.model.net._initialize_weights()
             self.logger.info('Start Training...')
 
         # dataloader
@@ -314,7 +314,7 @@ class SotTrainer:
         self.model.train()
         iter_start_time = time.time()
         iter_end_time = time.time()
-        for data_iter, (inps, inps_pair) in enumerate(self.train_loader):
+        for data_iter, (inps, inps_pair, inps_gt, inps_pair_gt) in enumerate(self.train_loader):
             cur_iter = self.start_iter + data_iter
 
             lr = self.lr_scheduler.get_lr(cur_iter)
@@ -327,7 +327,7 @@ class SotTrainer:
             model_start_time = time.time()
 
 
-            outputs = self.model([inps, inps_pair], device=self.device)
+            outputs = self.model([inps, inps_pair, inps_gt, inps_pair_gt], device=self.device)
             loss = outputs['total_loss']
 
             self.optimizer.zero_grad()
@@ -375,7 +375,8 @@ class SotTrainer:
                     time_str,
                     loss_str,
                     self.meter['lr'].latest,
-                ) + (', size: ({:d}, {:d}), {}'.format(
+                    ) +  (', giou_loss: {:.4f}, l1_loss: {:.4f}, location_loss: {:.4f}'.format(outputs_array['Loss/giou'], outputs_array['Loss/l1'], outputs_array['Loss/location'])) +
+                (', size: ({:d}, {:d}), {}'.format(
                     inps.shape[2], inps.shape[3], eta_str)))
                 self.meter.clear_meters()
 

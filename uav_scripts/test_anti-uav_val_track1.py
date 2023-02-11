@@ -23,6 +23,7 @@ class AntiUavTrack1Val(unittest.TestCase, DemoCompatibilityCheck):
     def setUp(self) -> None:
         self.task = Tasks.video_single_object_tracking
         self.model_id = 'damo/cv_alex_video-single-object-tracking_siamfc'
+        self.model_id = 'damo/cv_vitb_video-single-object-tracking_ostrack'
         val_set = MsDataset.load('3rd_Anti-UAV', namespace='ly261666', split='validation')
         assert val_set is not None, 'test set should be downloaded first'
         # set own path
@@ -93,8 +94,9 @@ class AntiUavTrack1Val(unittest.TestCase, DemoCompatibilityCheck):
         # run tracking experiments and report performance
         for video_id, video_path in enumerate(video_paths, start=1):
             uav_tracker = pipeline(self.task, model=self.model_id)
-            tracker = uav_tracker.model
-            output_dir = os.path.join('results', tracker.tracker_name + '_{got10k}')
+            tracker = uav_tracker.tracker
+            #output_dir = os.path.join('results', tracker.tracker_name + '_{got10k}')
+            output_dir = os.path.join('results', 'ostrack')
             if not os.path.exists(output_dir):
                 os.makedirs(output_dir)
 
@@ -118,7 +120,7 @@ class AntiUavTrack1Val(unittest.TestCase, DemoCompatibilityCheck):
                     out_res.append(init_rect)
                 else:
                     out = tracker.track(frame)  # tracking
-                    pred_bbox = out['target_bbox'].tolist()
+                    pred_bbox = out['target_bbox']
                     pred_bbox = list(map(int, pred_bbox))
                     pred_bbox[3] = pred_bbox[3] - pred_bbox[1] + 1
                     pred_bbox[2] = pred_bbox[2] - pred_bbox[0] + 1

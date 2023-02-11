@@ -156,15 +156,15 @@ class Pairwise(Dataset):
         self.indices = np.random.permutation(len(seq_dataset))
         # augmentation for exemplar and instance images
         self.transform_z = Compose([
-            RandomStretch(max_stretch=0.05),
-            CenterCrop(self.instance_sz - 8),
-            RandomCrop(self.instance_sz - 2 * 8),
-            CenterCrop(self.exemplar_sz),
+            #RandomStretch(max_stretch=0.05),
+            #CenterCrop(self.instance_sz - 8),
+            #RandomCrop(self.instance_sz - 2 * 8),
+            #CenterCrop(self.exemplar_sz),
             ToTensor()])
         self.transform_x = Compose([
-            RandomStretch(max_stretch=0.05),
-            CenterCrop(self.instance_sz - 8),
-            RandomCrop(self.instance_sz - 2 * 8),
+            #RandomStretch(max_stretch=0.05),
+            #CenterCrop(self.instance_sz - 8),
+            #RandomCrop(self.instance_sz - 2 * 8),
             ToTensor()])
 
 
@@ -183,12 +183,12 @@ class Pairwise(Dataset):
 
         exemplar_image = Image.open(img_files[rand_z])
         instance_image = Image.open(img_files[rand_x])
-        exemplar_image = self._crop_and_resize(exemplar_image, anno[rand_z])
-        instance_image = self._crop_and_resize(instance_image, anno[rand_x])
+        exemplar_image, exemplar_image_box = self._crop_and_resize(exemplar_image, anno[rand_z], self.exemplar_sz)
+        instance_image, instance_image_box  = self._crop_and_resize(instance_image, anno[rand_x], self.instance_sz)
         exemplar_image = 255.0 * self.transform_z(exemplar_image)
         instance_image = 255.0 * self.transform_x(instance_image)
 
-        return exemplar_image, instance_image
+        return exemplar_image, instance_image, exemplar_image_box, instance_image_box
 
     def __len__(self):
         return self.pairs_per_seq * len(self.seq_dataset)
@@ -207,16 +207,22 @@ class Pairwise(Dataset):
 
         return rand_z, rand_x
 
-    def _crop_and_resize(self, image, box):
+    def _crop_and_resize(self, image, box, target_size):
         # convert box to 0-indexed and center based
+        or_box = box.copy()
         box = np.array([
             box[0] - 1 + (box[2] - 1) / 2,
             box[1] - 1 + (box[3] - 1) / 2,
             box[2], box[3]], dtype=np.float32)
         center, target_sz = box[:2], box[2:]
 
+
         # exemplar and search sizes
-        context = self.context * np.sum(target_sz)
+        import random
+        fix_th = 0.2
+        context = self.context - fix_th + random.random() * fix_th * 2
+
+        context = context * np.sum(target_sz)
         z_sz = np.sqrt(np.prod(target_sz + context))
         x_sz = z_sz * self.instance_sz / self.exemplar_sz
 
@@ -241,8 +247,18 @@ class Pairwise(Dataset):
         corners = tuple((corners + npad).astype(int))
         patch = image.crop(corners)
 
-        # resize to instance_sz
-        out_size = (self.instance_sz, self.instance_sz)
+        resize_ratio =  target_size / patch.size[0]
+        x0 = max(or_box[0] - corners[0] + npad, 0) * resize_ratio
+        y0 = max(or_box[1] - corners[1] + npad, 0) * resize_ratio
+        ret_box = [x0 , y0, target_sz[0] * resize_ratio, target_sz[1] * resize_ratio]
+        
+
+        # resize to target_size
+        out_size = (target_size, target_size)
         patch = patch.resize(out_size, Image.BILINEAR)
 
-        return patch
+        #gt = patch.crop(ret_box)
+        #import time
+        #gt.save('./tmp_img/{}_tmp_1_{}.png'.format(0, time.time()))
+
+        return patch, torch.Tensor(ret_box)
