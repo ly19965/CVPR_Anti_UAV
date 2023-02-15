@@ -219,7 +219,7 @@ class Pairwise(Dataset):
 
         # exemplar and search sizes
         import random
-        fix_th = 0.2
+        fix_th = 0.0
         context = self.context - fix_th + random.random() * fix_th * 2
 
         context = context * np.sum(target_sz)
@@ -260,8 +260,9 @@ class Pairwise(Dataset):
         out_size = (target_size, target_size)
         patch = patch.resize(out_size, Image.BILINEAR)
 
-        #gt = patch.crop(ret_box)
+        #tmp_ret_box=[ret_box[0], ret_box[1], ret_box[0] + ret_box[2], ret_box[1] + ret_box[3]]
+        #gt = patch.crop(tmp_ret_box)
         #import time
-        #gt.save('./tmp_img/{}_tmp_1_{}.png'.format(0, time.time()))
+        #gt.save('./tmp_img/{}_tmp_1_{:.4f}.png'.format(0, time.time()))
 
         return patch, torch.Tensor(ret_box)

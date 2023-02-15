@@ -57,7 +57,7 @@ class OsTrackL(TorchModel):
         device = kwargs.get('device')
         self.device = torch.device("cuda")# if device == 'gpu' else "cpu")
         network = build_ostrack(cfg)
-        self.net = network
+        self.net = network.to(self.device)
 
         self.state = None
         self.feat_sz = self.cfg.TEST.SEARCH_SIZE // self.cfg.MODEL.BACKBONE.STRIDE
@@ -73,7 +73,7 @@ class OsTrackL(TorchModel):
         self.z_dict1 = {}
         focal_loss = FocalLoss()
         self.loss_objective = {'giou': giou_loss, 'l1': l1_loss, 'focal': focal_loss, 'cls': BCEWithLogitsLoss()}
-        self.loss_weight = {'giou': 1, 'l1': 1, 'focal': 1}
+        self.loss_weight = {'giou': 5, 'l1': 2, 'focal': 1}
 
 
     def initialize(self, image, info: dict):
@@ -179,6 +179,7 @@ class OsTrackL(TorchModel):
         data = {}
         data['template_images'] = input_data[0]
         data['search_images'] = input_data[1]
+        data['template_anno'] = input_data[2]
         out_dict = self.forward_pass(data)
 
         # compute losses
@@ -194,6 +195,16 @@ class OsTrackL(TorchModel):
 
         box_mask_z = None
         ce_keep_rate = None
+        if self.cfg.MODEL.BACKBONE.CE_LOC:
+            box_mask_z = generate_mask_cond(self.cfg, template_list.shape[0], template_list[0].device,
+                                            data['template_anno'] / cfg.DATA.TEMPLATE.SIZE)
+
+            ce_keep_rate = 0.5
+            #ce_keep_rate = adjust_keep_rate(data['epoch'], warmup_epochs=ce_start_epoch,
+            #                                    total_epochs=ce_start_epoch + ce_warm_epoch,
+            #                                    ITERS_PER_EPOCH=1,
+            #                                    base_keep_rate=self.cfg.MODEL.BACKBONE.CE_KEEP_RATIO[0])
+
 
 
         out_dict = self.net(template=template_list,
@@ -206,7 +217,7 @@ class OsTrackL(TorchModel):
 
     def compute_losses(self, pred_dict, template_gt_dict, search_gt_dict, return_status=True):
         # gt gaussian map
-        gt_bbox = search_gt_dict.unsqueeze(0)  # (Ns, batch, 4) (x1,y1,w,h) -> (batch, 4)
+        gt_bbox = search_gt_dict.unsqueeze(0) #/ self.cfg.DATA.SEARCH.SIZE  # (Ns, batch, 4) (x1,y1,w,h) -> (batch, 4)
         gt_gaussian_maps = generate_heatmap(gt_bbox, self.cfg.DATA.SEARCH.SIZE, self.cfg.MODEL.BACKBONE.STRIDE)
         gt_gaussian_maps = gt_gaussian_maps[-1].unsqueeze(1)
 
@@ -215,10 +226,10 @@ class OsTrackL(TorchModel):
         if torch.isnan(pred_boxes).any():
             raise ValueError("Network outputs is NAN! Stop Training")
         num_queries = pred_boxes.size(1)
-        pred_boxes_vec = box_cxcywh_to_xyxy(pred_boxes).view(-1, 4)  # (B,N,4) --> (BN,4) (x1,y1,x2,y2)
+        pred_boxes_vec = box_cxcywh_to_xyxy(pred_boxes).view(-1, 4)    # (B,N,4) --> (BN,4) (x1,y1,x2,y2)
         #gt_boxes_vec = box_xywh_to_xyxy(gt_bbox)[:, None, :].repeat((1, num_queries, 1)).view(-1, 4).clamp(min=0.0,
         #                                                                                                   max=1.0)  # (B,4) --> (B,1,4) --> (B,N,4)
-        gt_boxes_vec = (box_xywh_to_xyxy(gt_bbox).repeat((1, num_queries, 1)).view(-1, 4) /  self.cfg.DATA.SEARCH.SIZE).clamp(min=0.0, max=1.0)  # (B,4) --> (B,1,4) --> (B,N,4)
+        gt_boxes_vec = (box_xywh_to_xyxy(gt_bbox).repeat((1, num_queries, 1)).view(-1, 4) / self.cfg.DATA.SEARCH.SIZE).clamp(min=0.0, max=1.0)  # (B,4) --> (B,1,4) --> (B,N,4)
         # compute giou and iou
         try:
             giou_loss, iou = self.loss_objective['giou'](pred_boxes_vec, gt_boxes_vec)  # (BN,4) (BN,4)
@@ -257,7 +268,12 @@ class OsTrackL(TorchModel):
                 m.bias.data.zero_()
 
     def load_pretrain(self, ckpt_path):
-        load_dict = torch.load(ckpt_path, map_location='cpu')['state_dict']
+        load_dict = torch.load(ckpt_path, map_location='cpu')
+        if 'net' in load_dict.keys():
+            load_dict = load_dict['net']
+        else:
+            load_dict = load_dict['state_dict']
+        #load_dict = torch.load(ckpt_path, map_location='cpu')['state_dict']
         new_dict = {}
         for k, v in load_dict.items():
             new_dict['net.' + k] = v
@@ -270,11 +286,11 @@ class OsTrackL(TorchModel):
         #logger.info(f'loading model from {ckpt_path}')
         model_dir = kwargs.pop('model_dir')
         model = cls(**kwargs)
-        return model
-        #ckpt_path = os.path.join(model_dir, model_file)
-        #load_dict = torch.load(ckpt_path, map_location='cpu')['state_dict']
-        #new_dict = {}
-        #for k, v in load_dict.items():
-        #    new_dict['net.' + k] = v
-        #model.load_state_dict(new_dict)
         #return model
+        ckpt_path = os.path.join(model_dir, model_file)
+        load_dict = torch.load(ckpt_path, map_location='cpu')['net']
+        new_dict = {}
+        for k, v in load_dict.items():
+            new_dict['net.' + k] = v
+        model.load_state_dict(new_dict, strict=True)
+        return model

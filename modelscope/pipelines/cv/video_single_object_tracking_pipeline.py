@@ -7,8 +7,6 @@ import cv2
 from modelscope.metainfo import Pipelines
 from modelscope.models.cv.video_single_object_tracking.config.ostrack import \
     cfg
-from modelscope.models.cv.video_single_object_tracking.tracker.ostrack import \
-    OSTrack
 from modelscope.models.cv.video_single_object_tracking.utils.utils import (
     check_box, timestamp_format)
 from modelscope.outputs import OutputKeys

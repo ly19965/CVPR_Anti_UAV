@@ -23,7 +23,7 @@ class AntiUavTrack1Val(unittest.TestCase, DemoCompatibilityCheck):
     def setUp(self) -> None:
         self.task = Tasks.video_single_object_tracking
         self.model_id = 'damo/cv_alex_video-single-object-tracking_siamfc'
-        self.model_id = 'damo/cv_vitb_video-single-object-tracking_ostrack'
+        self.model_id = 'damo/cv_vitb_video-single-object-tracking_ostrack-l'
         val_set = MsDataset.load('3rd_Anti-UAV', namespace='ly261666', split='validation')
         assert val_set is not None, 'test set should be downloaded first'
         # set own path

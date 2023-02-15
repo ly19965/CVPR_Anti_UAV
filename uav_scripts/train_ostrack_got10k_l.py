@@ -19,6 +19,7 @@ model_id = 'damo/cv_vitb_video-single-object-tracking_ostrack-l'
 video_single_object_tracking = pipeline(Tasks.video_single_object_tracking, model=model_id) # 下载modelscope上的模型，配置文件
 cache_path = '/home/ly261666/.cache/modelscope/hub/damo/cv_vitb_video-single-object-tracking_ostrack-l'# 下载的modelscope模型路径
 cfg_file = os.path.join(cache_path, 'configuration.json')
+pretrain_model = '/home/ly261666/.cache/modelscope/hub/damo/cv_vitb_video-single-object-tracking_ostrack-l/pytorch_model.bin'
 
 kwargs = dict(
     cfg_file=cfg_file,
@@ -26,13 +27,14 @@ kwargs = dict(
     gpu_ids=[  # 指定训练使用的gpu
     0,1,2,3,4,5,6,7
     ],
-    batch_size=64, # batch_size, 每个gpu上的图片数等于batch_size // len(gpu_ids)
+    batch_size=16, # batch_size, 每个gpu上的图片数等于batch_size // len(gpu_ids)
     max_epochs=10, # 总的训练epochs
-    load_pretrain=False, # 是否载入预训练模型，若为False，则为从头重新训练, 若为True，则加载modelscope上的模型finetune。
-    base_lr_per_img=0.001, # 每张图片的学习率，lr=base_lr_per_img*batch_size
+    load_pretrain=True, # 是否载入预训练模型，若为False，则为从头重新训练, 若为True，则加载modelscope上的模型finetune。
+    base_lr_per_img=0.01, # 每张图片的学习率，lr=base_lr_per_img*batch_size
     train_image_dir=data_root_dir, # 训练图片路径
     val_image_dir=data_root_dir, # 测试图片路径
     workers_per_gpu=1,
+    pretrain_model=pretrain_model,
     )
 
 

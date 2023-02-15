@@ -15,6 +15,7 @@ train_dataset = MsDataset.load('3rd_Anti-UAV', namespace='ly261666', split='trai
 
 # Step 2: 相关参数设置
 data_root_dir = '/home/ly261666/.cache/modelscope/hub/datasets/ly261666/3rd_Anti-UAV/master/data_files/extracted/7b8a88c5a8f38cced25ee619b96d924c0eea9f033bb57fc160ca2ec004d1ee6f' # 下载的数据集路径
+data_root_dir = '/home/ly261666/workspace/maas/modelscope_project/Mass_env/or_data/train_data/new_data' # 下载的数据集路径
 model_id = 'damo/cv_vitb_video-single-object-tracking_ostrack-uav-l'
 video_single_object_tracking = pipeline(Tasks.video_single_object_tracking, model=model_id) # 下载modelscope上的模型，配置文件
 cache_path = '/home/ly261666/.cache/modelscope/hub/damo/cv_vitb_video-single-object-tracking_ostrack-uav-l'# 下载的modelscope模型路径

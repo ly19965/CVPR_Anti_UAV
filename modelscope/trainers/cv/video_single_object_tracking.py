@@ -387,6 +387,11 @@ class SotTrainer:
                     'epoch_%d_ckpt.pth' % (self.epoch + 1),
                     local_rank=local_rank)
 
+            if (cur_iter + 1) % 200 == 0:
+                self.save_ckpt(
+                    'iter_%d_ckpt.pth' % (cur_iter + 1),
+                    local_rank=local_rank)
+
             if (cur_iter + 1) % self.eval_interval_iters == 0:
                 time.sleep(0.003)
                 self.model.train()
